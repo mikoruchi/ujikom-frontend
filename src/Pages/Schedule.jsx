@@ -42,6 +42,14 @@ const Schedule = () => {
     return instance;
   };
 
+  // Format price dengan titik untuk ribuan
+  const formatPrice = (price) => {
+    if (!price && price !== 0) return "Rp 0";
+    const numPrice = Number(price);
+    if (isNaN(numPrice)) return "Rp 0";
+    return `Rp ${numPrice.toLocaleString('id-ID')}`;
+  };
+
   // Fetch studios from API - TANPA AUTH
   const fetchStudios = async () => {
     try {
@@ -134,12 +142,6 @@ const Schedule = () => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}h ${mins}m`;
-  };
-
-  // Format price
-  const formatPrice = (price) => {
-    if (!price) return "Rp 0";
-    return `Rp ${price.toLocaleString('id-ID')}`;
   };
 
   useEffect(() => {

@@ -10,7 +10,6 @@ import Register from "./Pages/Register";
 import Profile from "./Pages/Profile";
 
 import Schedule from "./Pages/Schedule";
-import Cart from "./Pages/Cart";
 import MovieDetail from "./Pages/MovieDetail";
 import NotFound from "./Pages/NotFound";
 import SeatSelection from "./Pages/SeatSelection";
@@ -29,8 +28,8 @@ import AdminSeats from "./Pages/Admin/Seats";
 import AdminStudios from "./Pages/Admin/Studios";
 
 // Cashier & Owner Pages
-import CashierDashboard from "./Pages/CashierDashboard";
-import OwnerDashboard from "./Pages/OwnerDashboard";
+import CashierDashboard from "./Pages/Cashier/CashierDashboard";
+import OwnerDashboard from "./Pages/Owner/OwnerDashboard";
 
 function App() {
   const location = useLocation();
@@ -84,8 +83,7 @@ function App() {
           <Route path="/films" element={<Films />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           
-          {/* Halaman Cart */}
-          <Route path="/cart" element={<Cart />} />
+          
           
           {/* Halaman Kontak */}
           <Route path="/contact" element={<Contact />} />

@@ -90,25 +90,36 @@ const BookingHistory = () => {
 
   // Format date
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('id-ID', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Tanggal tidak valid';
+    }
   };
 
   // Format time
   const formatTime = (timeString) => {
-    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!timeString) return 'N/A';
+    try {
+      return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return timeString;
+    }
   };
 
   // Format price
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('id-ID').format(price);
+    const numPrice = Number(price) || 0;
+    return new Intl.NumberFormat('id-ID').format(numPrice);
   };
 
   // Get status color
@@ -133,7 +144,7 @@ const BookingHistory = () => {
       case 'completed':
         return 'Selesai';
       case 'booked':
-        return 'Dipesan';
+        return 'Menunggu Pembayaran';
       case 'cancelled':
         return 'Dibatalkan';
       default:
@@ -143,28 +154,35 @@ const BookingHistory = () => {
 
   // Check if ticket is upcoming (for today or future)
   const isUpcoming = (ticket) => {
-    if (ticket.status !== 'booked') return false;
+    if (ticket.status !== 'booked' && ticket.status !== 'paid') return false;
+    if (!ticket.jadwal?.date || !ticket.jadwal?.time) return false;
     
-    const showDate = new Date(ticket.jadwal?.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    return showDate >= today;
+    try {
+      const showDate = new Date(ticket.jadwal.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      return showDate >= today;
+    } catch (error) {
+      return false;
+    }
   };
 
   // Check if ticket can be cancelled (only booked tickets for future shows)
   const canCancel = (ticket) => {
     if (ticket.status !== 'booked') return false;
+    if (!ticket.jadwal?.date || !ticket.jadwal?.time) return false;
     
-    const showDate = new Date(ticket.jadwal?.date);
-    const today = new Date();
-    
-    // Can cancel if show is at least 2 hours from now
-    const showDateTime = new Date(`${ticket.jadwal?.date}T${ticket.jadwal?.time}`);
-    const timeDiff = showDateTime - today;
-    const hoursDiff = timeDiff / (1000 * 60 * 60);
-    
-    return hoursDiff > 2;
+    try {
+      const showDateTime = new Date(`${ticket.jadwal.date}T${ticket.jadwal.time}`);
+      const today = new Date();
+      const timeDiff = showDateTime - today;
+      const hoursDiff = timeDiff / (1000 * 60 * 60);
+      
+      return hoursDiff > 2;
+    } catch (error) {
+      return false;
+    }
   };
 
   // View ticket details
@@ -172,16 +190,29 @@ const BookingHistory = () => {
     navigate('/ticket-detail', { state: { ticket } });
   };
 
-  // Download invoice (placeholder function)
+  // Download invoice
   const handleDownloadInvoice = (ticket) => {
-    alert('Fitur download invoice akan segera tersedia!');
-    console.log('Download invoice for:', ticket);
+    // Implementasi download invoice berdasarkan data dari API
+    if (ticket.invoice_url) {
+      window.open(ticket.invoice_url, '_blank');
+    } else {
+      alert('Invoice belum tersedia untuk diunduh');
+    }
   };
 
-  // Give rating (placeholder function)
+  // Give rating
   const handleGiveRating = (ticket) => {
-    alert('Fitur rating akan segera tersedia!');
-    console.log('Give rating for:', ticket);
+    navigate('/rating', { state: { ticket } });
+  };
+
+  // Retry payment for booked tickets
+  const handleRetryPayment = (ticket) => {
+    navigate('/payment', { 
+      state: { 
+        bookingId: ticket.id,
+        totalPrice: ticket.jadwal?.price 
+      } 
+    });
   };
 
   useEffect(() => {
@@ -227,7 +258,7 @@ const BookingHistory = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-6xl mx-auto px-4">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Riwayat Pemesanan</h1>
@@ -260,13 +291,25 @@ const BookingHistory = () => {
           <div className="space-y-6">
             {bookings.map(ticket => (
               <div key={ticket.id} className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                  {/* Movie Poster */}
+                  <div className="flex-shrink-0">
+                    <img
+                      src={ticket.jadwal?.movie?.poster || '/api/placeholder/80/112'}
+                      alt={ticket.jadwal?.movie?.title}
+                      className="w-20 h-28 object-cover rounded-lg"
+                      onError={(e) => {
+                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iMTEyIiB2aWV3Qm94PSIwIDAgODAgMTEyIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSI4MCIgaGVpZ2h0PSIxMTIiIGZpbGw9IiMzQTRBNTciLz48dGV4dCB4PSI0MCIgeT0iNTYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM3RTg4OEQiIGZvbnQtc2l6ZT0iMTIiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiI+Tm8gSW1hZ2U8L3RleHQ+PC9zdmc+';
+                      }}
+                    />
+                  </div>
+
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                       <h3 className="text-xl font-semibold text-white">
-                        {ticket.jadwal?.movie?.title || 'Unknown Movie'}
+                        {ticket.jadwal?.movie?.title || 'Film Tidak Diketahui'}
                       </h3>
-                      <span className={`px-2 py-1 rounded text-xs font-semibold text-white ${getStatusColor(ticket.status)}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${getStatusColor(ticket.status)}`}>
                         {getStatusText(ticket.status)}
                         {isUpcoming(ticket) && ' • Akan Datang'}
                       </span>
@@ -280,18 +323,18 @@ const BookingHistory = () => {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Tanggal Tayang:</span>
-                          <span className="text-white">{ticket.jadwal?.date ? formatDate(ticket.jadwal.date) : 'N/A'}</span>
+                          <span className="text-white">{formatDate(ticket.jadwal?.date)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Jam Tayang:</span>
-                          <span className="text-white">{ticket.jadwal?.time ? formatTime(ticket.jadwal.time) : 'N/A'}</span>
+                          <span className="text-white">{formatTime(ticket.jadwal?.time)}</span>
                         </div>
                       </div>
                       
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-gray-400">Studio:</span>
-                          <span className="text-white">{ticket.studio?.studio || 'N/A'}</span>
+                          <span className="text-white">{ticket.studio?.studio || ticket.jadwal?.studio?.studio || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Kursi:</span>
@@ -304,6 +347,22 @@ const BookingHistory = () => {
                           </span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Additional Info */}
+                    <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-400">
+                      <div>
+                        <span>Dipesan pada: </span>
+                        <span className="text-gray-300">
+                          {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('id-ID') : 'N/A'}
+                        </span>
+                      </div>
+                      {ticket.booking_code && (
+                        <div>
+                          <span>Kode Booking: </span>
+                          <span className="text-green-400 font-mono">{ticket.booking_code}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* QR Code Info */}
@@ -320,15 +379,21 @@ const BookingHistory = () => {
                     {ticket.status === 'booked' && (
                       <>
                         <button 
-                          onClick={() => handleViewTicket(ticket)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold"
+                          onClick={() => handleRetryPayment(ticket)}
+                          className="bg-yellow-500 hover:bg-yellow-600 text-black py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                         >
-                          Lihat Tiket
+                          Bayar Sekarang
+                        </button>
+                        <button 
+                          onClick={() => handleViewTicket(ticket)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          Detail Pemesanan
                         </button>
                         {canCancel(ticket) && (
                           <button 
                             onClick={() => handleCancelTicket(ticket.id)}
-                            className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold"
+                            className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                           >
                             Batalkan
                           </button>
@@ -350,19 +415,27 @@ const BookingHistory = () => {
                       <>
                         <button 
                           onClick={() => handleViewTicket(ticket)}
-                          className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-semibold"
+                          className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                         >
                           Lihat Tiket
                         </button>
                         <button 
                           onClick={() => handleDownloadInvoice(ticket)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold"
+                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                         >
                           Download Invoice
                         </button>
+                        {isUpcoming(ticket) && (
+                          <button 
+                            onClick={() => handleCancelTicket(ticket.id)}
+                            className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
+                          >
+                            Batalkan
+                          </button>
+                        )}
                         <button 
                           onClick={() => handleGiveRating(ticket)}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-black py-2 px-4 rounded-lg text-sm font-semibold"
+                          className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                         >
                           Beri Rating
                         </button>
@@ -372,19 +445,13 @@ const BookingHistory = () => {
                     {/* Actions for cancelled tickets */}
                     {ticket.status === 'cancelled' && (
                       <button 
-                        disabled
-                        className="bg-gray-500 text-white py-2 px-4 rounded-lg text-sm font-semibold cursor-not-allowed"
+                        onClick={() => handleViewTicket(ticket)}
+                        className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
                       >
-                        Dibatalkan
+                        Lihat Detail
                       </button>
                     )}
                   </div>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t border-gray-700">
-                  <p className="text-xs text-gray-500">
-                    Dipesan pada: {ticket.created_at ? formatDate(ticket.created_at) : 'N/A'}
-                  </p>
                 </div>
               </div>
             ))}
@@ -392,20 +459,36 @@ const BookingHistory = () => {
         )}
 
         {/* Info tentang status tiket */}
-        <div className="mt-8 bg-gray-800 rounded-lg p-4">
-          <h3 className="text-yellow-400 font-semibold mb-3">Informasi Status Tiket:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-center gap-2">
+        <div className="mt-8 bg-gray-800 rounded-lg p-6">
+          <h3 className="text-yellow-400 font-semibold mb-4">Informasi Status Tiket:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-gray-300">Dipesan - Menunggu pembayaran</span>
+              <div>
+                <div className="text-white font-semibold">Menunggu Pembayaran</div>
+                <div className="text-gray-400 text-xs">Selesaikan pembayaran dalam 15 menit</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span className="text-gray-300">Selesai - Tiket aktif</span>
+              <div>
+                <div className="text-white font-semibold">Selesai</div>
+                <div className="text-gray-400 text-xs">Pembayaran berhasil, tiket aktif</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
               <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <span className="text-gray-300">Dibatalkan - Tiket tidak valid</span>
+              <div>
+                <div className="text-white font-semibold">Dibatalkan</div>
+                <div className="text-gray-400 text-xs">Pemesanan dibatalkan</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
+              <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+              <div>
+                <div className="text-white font-semibold">Kadaluarsa</div>
+                <div className="text-gray-400 text-xs">Pembayaran tidak diselesaikan</div>
+              </div>
             </div>
           </div>
         </div>
