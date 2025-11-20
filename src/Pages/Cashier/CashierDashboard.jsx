@@ -5,11 +5,11 @@ import {
   Users, 
   CreditCard, 
   Printer,
-  CheckCircle,
-  XCircle,
   User,
-  Phone
+  Phone,
+  Loader
 } from 'lucide-react';
+import axios from 'axios';
 
 const CashierDashboard = () => {
   const [movies, setMovies] = useState([]);
@@ -21,92 +21,161 @@ const CashierDashboard = () => {
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '' });
   const [total, setTotal] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [loading, setLoading] = useState({
+    movies: false,
+    schedules: false,
+    seats: false,
+    payment: false
+  });
 
-  // Sample data
+  const API_BASE = 'http://127.0.0.1:8000/api/v1';
+
+  // Fetch movies from database
   useEffect(() => {
-    setMovies([
-      { 
-        id: 1, 
-        title: 'Avengers: Endgame', 
-        price: 50000,
-        genre: 'Action, Adventure',
-        duration: '3h 1m',
-        rating: 8.4
-      },
-      { 
-        id: 2, 
-        title: 'Spider-Man: No Way Home', 
-        price: 45000,
-        genre: 'Action, Adventure',
-        duration: '2h 28m',
-        rating: 8.2
-      },
-      { 
-        id: 3, 
-        title: 'The Batman', 
-        price: 55000,
-        genre: 'Action, Crime',
-        duration: '2h 56m',
-        rating: 7.8
-      },
-      { 
-        id: 4, 
-        title: 'Avatar: The Way of Water', 
-        price: 60000,
-        genre: 'Adventure, Sci-Fi',
-        duration: '3h 12m',
-        rating: 7.6
+    const fetchMovies = async () => {
+      try {
+        setLoading(prev => ({ ...prev, movies: true }));
+        const response = await axios.get(`${API_BASE}/films`);
+        
+        if (response.data.success) {
+          setMovies(response.data.data || []);
+        } else {
+          console.error('Failed to fetch movies:', response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching movies:', error);
+        alert('Gagal memuat data film');
+      } finally {
+        setLoading(prev => ({ ...prev, movies: false }));
       }
-    ]);
+    };
+
+    fetchMovies();
   }, []);
 
-  const handleMovieSelect = (movie) => {
+  // Handle movie selection
+  const handleMovieSelect = async (movie) => {
     setSelectedMovie(movie);
     setSelectedSchedule(null);
     setSeats([]);
     setSelectedSeats([]);
     
-    setSchedules([
-      { id: 1, time: '10:00', studio: 'Studio 1', type: '2D' },
-      { id: 2, time: '13:00', studio: 'Studio 2', type: '3D' },
-      { id: 3, time: '16:00', studio: 'Studio 1', type: '2D' },
-      { id: 4, time: '19:00', studio: 'Studio 3', type: 'IMAX' }
-    ]);
+    try {
+      setLoading(prev => ({ ...prev, schedules: true }));
+      const response = await axios.get(`${API_BASE}/jadwals/movie/${movie.id}`);
+      
+      if (response.data.success) {
+        // Format schedules untuk tampilan
+        const formattedSchedules = response.data.data.flatMap(studioSchedule => 
+          studioSchedule.times.map(time => ({
+            id: `${studioSchedule.studio.id}-${time}`,
+            time: time,
+            studio: studioSchedule.studio.studio,
+            studio_id: studioSchedule.studio.id,
+            studio_name: studioSchedule.studio.studio,
+            type: '2D',
+            price: studioSchedule.price || 50000
+          }))
+        );
+        setSchedules(formattedSchedules);
+      }
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+      alert('Gagal memuat jadwal film');
+    } finally {
+      setLoading(prev => ({ ...prev, schedules: false }));
+    }
   };
 
-  const handleScheduleSelect = (schedule) => {
+  // Handle schedule selection - FIXED
+  const handleScheduleSelect = async (schedule) => {
     setSelectedSchedule(schedule);
-    const seatList = [];
+    setSelectedSeats([]); // Reset selected seats
     
-    // Generate seats with more realistic layout
+    try {
+      setLoading(prev => ({ ...prev, seats: true }));
+      
+      console.log('Fetching seats for studio:', schedule.studio_id);
+      
+      // ✅ GUNAKAN ENDPOINT SEATS YANG SUDAH ADA
+      const response = await axios.get(`${API_BASE}/seats/studio/${schedule.studio_id}/available`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Seats API Response:', response.data);
+
+      if (response.data.success) {
+        // Format seats untuk tampilan
+        const formattedSeats = response.data.data.seats.map(seat => ({
+          id: seat.id,
+          seat_number: seat.kursi_no,
+          row: seat.kursi_no.charAt(0),
+          number: parseInt(seat.kursi_no.slice(1)) || seat.kursi_no,
+          available: seat.is_available,
+          vip: seat.kursi_type === 'vip',
+          price: seat.price || (seat.kursi_type === 'vip' ? 70000 : 50000),
+          status: seat.status
+        }));
+        
+        console.log('Formatted seats:', formattedSeats);
+        setSeats(formattedSeats);
+      } else {
+        throw new Error(response.data.message || 'Gagal memuat data kursi');
+      }
+    } catch (error) {
+      console.error('Error fetching seats:', error);
+      console.error('Error response:', error.response?.data);
+      
+      // Fallback: generate sample seats
+      const sampleSeats = generateSampleSeats(schedule.studio_id);
+      setSeats(sampleSeats);
+      
+      alert('Menggunakan data kursi sample. Pastikan endpoint seats tersedia.');
+    } finally {
+      setLoading(prev => ({ ...prev, seats: false }));
+    }
+  };
+
+  // Fallback function untuk generate sample seats
+  const generateSampleSeats = (studioId) => {
+    const seatList = [];
     const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
+    
     rows.forEach(row => {
-      for (let i = 1; i <= 12; i++) {
-        const seatId = `${row}${i}`;
+      for (let i = 1; i <= 8; i++) { // Kurangi jumlah kursi per baris
+        const seatNumber = `${row}${i}`;
         const isVip = row === 'A' || row === 'B';
         seatList.push({
-          id: seatId,
-          number: i,
+          id: `sample-${studioId}-${seatNumber}`,
+          seat_number: seatNumber,
           row: row,
-          available: Math.random() > 0.2,
+          number: i,
+          available: Math.random() > 0.3, // 70% available
           vip: isVip,
-          price: isVip ? (selectedMovie?.price || 50000) + 20000 : selectedMovie?.price || 50000
+          price: isVip ? 70000 : 50000,
+          status: 'available'
         });
       }
     });
-    setSeats(seatList);
+    
+    return seatList;
   };
 
+  // Toggle seat selection
   const toggleSeat = (seat) => {
     if (!seat.available) return;
     
-    if (selectedSeats.some(s => s.id === seat.id)) {
-      setSelectedSeats(selectedSeats.filter(s => s.id !== seat.id));
+    if (selectedSeats.some(s => s.seat_number === seat.seat_number)) {
+      setSelectedSeats(selectedSeats.filter(s => s.seat_number !== seat.seat_number));
     } else {
       setSelectedSeats([...selectedSeats, seat]);
     }
   };
 
+  // Calculate total
   useEffect(() => {
     if (selectedSeats.length > 0) {
       const newTotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
@@ -116,32 +185,84 @@ const CashierDashboard = () => {
     }
   }, [selectedSeats]);
 
+  // Process payment - FIXED
   const handlePayment = async () => {
     if (!customerInfo.name || !customerInfo.phone || selectedSeats.length === 0) {
       alert('Mohon lengkapi semua data dan pilih kursi');
       return;
     }
 
+    if (!selectedMovie || !selectedSchedule) {
+      alert('Pilih film dan jadwal terlebih dahulu');
+      return;
+    }
+
     setIsProcessing(true);
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      alert(`Pembayaran berhasil!\n\nDetail Transaksi:\nFilm: ${selectedMovie.title}\nJadwal: ${selectedSchedule.time} - ${selectedSchedule.studio}\nKursi: ${selectedSeats.map(s => s.id).join(', ')}\nTotal: Rp ${total.toLocaleString()}`);
-      
-      // Reset form
-      setSelectedMovie(null);
-      setSelectedSchedule(null);
-      setSeats([]);
-      setSelectedSeats([]);
-      setCustomerInfo({ name: '', phone: '' });
-      setTotal(0);
+    setLoading(prev => ({ ...prev, payment: true }));
+
+    try {
+      // ✅ GUNAKAN ENDPOINT CASHIER PAYMENT BARU
+      const paymentResponse = await axios.post(`${API_BASE}/payments/cashier-process`, {
+        film_id: selectedMovie.id,
+        studio_id: selectedSchedule.studio_id,
+        schedule_time: selectedSchedule.time,
+        kursi: selectedSeats.map(seat => seat.seat_number),
+        customer_name: customerInfo.name,
+        customer_phone: customerInfo.phone,
+        total_amount: total
+      }, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (paymentResponse.data.success) {
+        const payment = paymentResponse.data.data;
+        const bookingCode = paymentResponse.data.booking_code;
+
+        alert(`Pembayaran berhasil!\n\nDetail Transaksi:
+Film: ${selectedMovie.title}
+Jadwal: ${selectedSchedule.time} - ${selectedSchedule.studio}
+Kursi: ${selectedSeats.map(s => s.seat_number).join(', ')}
+Customer: ${customerInfo.name} (${customerInfo.phone})
+Total: Rp ${formatPrice(total)}
+Booking Code: ${bookingCode}`);
+
+        // Reset form
+        setSelectedMovie(null);
+        setSelectedSchedule(null);
+        setSeats([]);
+        setSelectedSeats([]);
+        setCustomerInfo({ name: '', phone: '' });
+        setTotal(0);
+      } else {
+        throw new Error(paymentResponse.data.message || 'Gagal memproses pembayaran');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert(`Gagal memproses pembayaran: ${error.response?.data?.message || error.message}`);
+    } finally {
       setIsProcessing(false);
-    }, 2000);
+      setLoading(prev => ({ ...prev, payment: false }));
+    }
   };
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('id-ID').format(price);
   };
+
+  // Group seats by row for display
+  const groupedSeats = seats.reduce((groups, seat) => {
+    const row = seat.row;
+    if (!groups[row]) {
+      groups[row] = [];
+    }
+    groups[row].push(seat);
+    return groups;
+  }, {});
+
+  const rows = Object.keys(groupedSeats).sort();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
@@ -164,6 +285,7 @@ const CashierDashboard = () => {
               <div className="flex items-center gap-3 mb-6">
                 <Film className="text-blue-600" size={24} />
                 <h2 className="text-xl font-bold text-gray-800">Pilih Film</h2>
+                {loading.movies && <Loader className="animate-spin text-blue-600" size={20} />}
               </div>
               
               <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -171,23 +293,24 @@ const CashierDashboard = () => {
                   <button
                     key={movie.id}
                     onClick={() => handleMovieSelect(movie)}
+                    disabled={loading.schedules}
                     className={`w-full p-4 text-left rounded-xl border-2 transition-all duration-300 ${
                       selectedMovie?.id === movie.id 
                         ? 'border-blue-500 bg-blue-50 shadow-md' 
                         : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:shadow-sm'
-                    }`}
+                    } ${loading.schedules ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-bold text-gray-800 text-lg">{movie.title}</h3>
                       <span className="bg-yellow-500 text-white px-2 py-1 rounded text-sm font-semibold">
-                        ⭐ {movie.rating}
+                        ⭐ {movie.rating || 'N/A'}
                       </span>
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>{movie.genre}</p>
-                      <p>⏱️ {movie.duration}</p>
+                      <p>⏱️ {movie.duration} menit</p>
                       <p className="text-green-600 font-semibold text-base">
-                        Rp {formatPrice(movie.price)}
+                        Rp {formatPrice(movie.price || 50000)}
                       </p>
                     </div>
                   </button>
@@ -234,6 +357,7 @@ const CashierDashboard = () => {
               <div className="flex items-center gap-3 mb-6">
                 <Clock className="text-purple-600" size={24} />
                 <h2 className="text-xl font-bold text-gray-800">Pilih Jadwal</h2>
+                {loading.schedules && <Loader className="animate-spin text-purple-600" size={20} />}
               </div>
               
               {selectedMovie ? (
@@ -242,11 +366,12 @@ const CashierDashboard = () => {
                     <button
                       key={schedule.id}
                       onClick={() => handleScheduleSelect(schedule)}
+                      disabled={loading.seats}
                       className={`w-full p-4 text-left rounded-xl border-2 transition-all duration-300 ${
                         selectedSchedule?.id === schedule.id 
                           ? 'border-purple-500 bg-purple-50 shadow-md' 
                           : 'border-gray-200 bg-gray-50 hover:border-purple-300 hover:shadow-sm'
-                      }`}
+                      } ${loading.seats ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-2xl font-bold text-gray-800">{schedule.time}</span>
@@ -259,7 +384,7 @@ const CashierDashboard = () => {
                         </span>
                       </div>
                       <div className="text-sm text-gray-600">
-                        {schedule.studio} • Harga normal
+                        {schedule.studio} • Rp {formatPrice(schedule.price)}
                       </div>
                     </button>
                   ))}
@@ -291,37 +416,48 @@ const CashierDashboard = () => {
 
                 {/* Seats Grid */}
                 <div className="max-w-2xl mx-auto mb-8">
-                  {['A', 'B', 'C', 'D', 'E', 'F'].map(row => (
-                    <div key={row} className="flex justify-center gap-2 mb-3">
-                      <div className="w-6 flex items-center justify-center text-sm font-semibold text-gray-600">
-                        {row}
-                      </div>
-                      {seats
-                        .filter(seat => seat.row === row)
-                        .map(seat => (
-                          <button
-                            key={seat.id}
-                            onClick={() => toggleSeat(seat)}
-                            disabled={!seat.available}
-                            className={`w-8 h-8 text-xs font-bold rounded-lg transition-all duration-200 transform hover:scale-110 ${
-                              !seat.available 
-                                ? 'bg-red-400 cursor-not-allowed' 
-                                : selectedSeats.some(s => s.id === seat.id)
-                                  ? seat.vip 
-                                    ? 'bg-yellow-500 text-white shadow-lg scale-110'
-                                    : 'bg-blue-600 text-white shadow-lg scale-110'
-                                  : seat.vip
-                                    ? 'bg-yellow-100 border-2 border-yellow-400 text-yellow-700 hover:bg-yellow-200'
-                                    : 'bg-green-200 border-2 border-green-400 text-green-700 hover:bg-green-300'
-                            }`}
-                            title={seat.vip ? `VIP - Rp ${formatPrice(seat.price)}` : `Regular - Rp ${formatPrice(seat.price)}`}
-                          >
-                            {seat.number}
-                          </button>
-                        ))
-                      }
+                  {loading.seats ? (
+                    <div className="text-center py-8">
+                      <Loader className="animate-spin text-blue-600 mx-auto mb-3" size={32} />
+                      <p className="text-gray-500">Memuat kursi...</p>
                     </div>
-                  ))}
+                  ) : seats.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>Tidak ada kursi tersedia</p>
+                    </div>
+                  ) : (
+                    rows.map(row => (
+                      <div key={row} className="flex justify-center gap-2 mb-3">
+                        <div className="w-6 flex items-center justify-center text-sm font-semibold text-gray-600">
+                          {row}
+                        </div>
+                        {groupedSeats[row]
+                          ?.sort((a, b) => a.number - b.number)
+                          .map(seat => (
+                            <button
+                              key={seat.id}
+                              onClick={() => toggleSeat(seat)}
+                              disabled={!seat.available}
+                              className={`w-8 h-8 text-xs font-bold rounded-lg transition-all duration-200 transform hover:scale-110 ${
+                                !seat.available 
+                                  ? 'bg-red-400 cursor-not-allowed' 
+                                  : selectedSeats.some(s => s.seat_number === seat.seat_number)
+                                    ? seat.vip 
+                                      ? 'bg-yellow-500 text-white shadow-lg scale-110'
+                                      : 'bg-blue-600 text-white shadow-lg scale-110'
+                                    : seat.vip
+                                      ? 'bg-yellow-100 border-2 border-yellow-400 text-yellow-700 hover:bg-yellow-200'
+                                      : 'bg-green-200 border-2 border-green-400 text-green-700 hover:bg-green-300'
+                              }`}
+                              title={`${seat.seat_number} - ${seat.vip ? 'VIP' : 'Regular'} - Rp ${formatPrice(seat.price)}`}
+                            >
+                              {seat.number}
+                            </button>
+                          ))
+                        }
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 {/* Legend */}
@@ -368,14 +504,14 @@ const CashierDashboard = () => {
                     <div className="flex flex-wrap gap-2">
                       {selectedSeats.map(seat => (
                         <span 
-                          key={seat.id}
+                          key={seat.seat_number}
                           className={`px-3 py-1 rounded-full text-sm font-semibold ${
                             seat.vip 
                               ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
                               : 'bg-blue-100 text-blue-800 border border-blue-300'
                           }`}
                         >
-                          {seat.id} {seat.vip && '(VIP)'}
+                          {seat.seat_number} {seat.vip && '(VIP)'}
                         </span>
                       ))}
                     </div>
@@ -383,8 +519,8 @@ const CashierDashboard = () => {
 
                   <div className="border-t pt-4">
                     {selectedSeats.map(seat => (
-                      <div key={seat.id} className="flex justify-between text-sm mb-2">
-                        <span>Kursi {seat.id} {seat.vip && '(VIP)'}</span>
+                      <div key={seat.seat_number} className="flex justify-between text-sm mb-2">
+                        <span>Kursi {seat.seat_number} {seat.vip && '(VIP)'}</span>
                         <span>Rp {formatPrice(seat.price)}</span>
                       </div>
                     ))}
@@ -397,12 +533,12 @@ const CashierDashboard = () => {
 
                   <button
                     onClick={handlePayment}
-                    disabled={!customerInfo.name || !customerInfo.phone || isProcessing}
+                    disabled={!customerInfo.name || !customerInfo.phone || isProcessing || loading.payment}
                     className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:from-green-600 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-3"
                   >
-                    {isProcessing ? (
+                    {isProcessing || loading.payment ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <Loader className="animate-spin" size={20} />
                         Memproses...
                       </>
                     ) : (
@@ -427,4 +563,4 @@ const CashierDashboard = () => {
   );
 };
 
-export default CashierDashboard;
+export default CashierDashboard;    

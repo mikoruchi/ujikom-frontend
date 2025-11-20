@@ -39,30 +39,83 @@ const Payment = () => {
     return seatsArray.join(', ');
   };
 
-  const handlePayment = async () => {
-    if (!paymentMethod) {
-      alert('Pilih metode pembayaran');
+const handlePayment = async () => {
+  if (!paymentMethod) {
+    alert("Pilih metode pembayaran");
+    return;
+  }
+
+  if (!seats || seats.length === 0) {
+    alert("Pilih kursi terlebih dahulu");
+    return;
+  }
+
+  setIsProcessing(true);
+
+  const token = localStorage.getItem('token');
+
+  try {
+    const selectedSeats = seats.map(seat => seat.kursi_no || seat);
+
+    // 🔥 Perbaikan paling penting
+    const jadwalId =
+      schedule?.jadwal_id ||
+      schedule?.id ||
+      schedule?.schedule_id ||
+      null;
+
+    if (!jadwalId) {
+      alert("Jadwal ID tidak ditemukan! Liat console.");
+      console.log("DEBUG schedule:", schedule);
+      setIsProcessing(false);
       return;
     }
 
-    setIsProcessing(true);
-    
-    // Simulate payment process
-    setTimeout(() => {
-      const bookingId = 'BKG' + Date.now();
-      navigate('/invoice', {
-        state: {
-          bookingId,
-          movie,
-          schedule,
-          seats,
-          totalPrice: finalPrice,
-          paymentMethod: selectedMethod.name,
-          bookingDate: new Date().toISOString()
-        }
-      });
-    }, 3000);
-  };
+    const response = await fetch("http://127.0.0.1:8000/api/v1/payments/process", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        jadwal_id: jadwalId,
+        film_id: movie?.id,
+        kursi: selectedSeats,
+        method: paymentMethod,
+        total_amount: finalPrice
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      console.error(data.errors || data);
+      alert(data.message || "Gagal memproses pembayaran");
+      return;
+    }
+
+    navigate("/invoice", {
+      state: {
+        bookingId: "BKG" + Date.now(),
+        movie,
+        schedule,
+        seats: selectedSeats,
+        totalPrice: finalPrice,
+        paymentMethod,
+        bookingDate: new Date().toISOString(),
+        paymentData: data.data
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    alert("Terjadi kesalahan saat memproses pembayaran");
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
 
   if (isProcessing) {
     return (

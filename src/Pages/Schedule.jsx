@@ -324,29 +324,30 @@ const Schedule = () => {
                             <div className={`text-sm mb-3 ${getAvailabilityColor(showtime.available)}`}>
                               🪑 {showtime.available} kursi tersisa
                             </div>
-                            <Link
-                              to="/seat-selection"
-                              state={{ 
-                                movie: { 
-                                  title: schedule.movie, 
-                                  poster: schedule.poster,
-                                  genre: schedule.genre,
-                                  duration: schedule.duration,
-                                  rating: schedule.rating
-                                },
-                                schedule: { 
-                                  date: selectedDate, 
-                                  time: showtime.time, 
-                                  studio: showtime.studio_name,
-                                  studio_id: showtime.studio_id,
-                                  price: showtime.price,
-                                  schedule_id: showtime.schedule_id
-                                }
-                              }}
-                              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-black font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 text-sm block text-center"
-                            >
-                              Pilih Kursi
-                            </Link>
+<Link
+  to="/seat-selection"
+  state={{ 
+    movie: { 
+      title: schedule.movie, 
+      poster: schedule.poster,
+      genre: schedule.genre,
+      duration: schedule.duration,
+      rating: schedule.rating
+    },
+    schedule: { 
+      id: showtime.schedule_id,   // <- wajib dikirim sebagai "id"
+      date: selectedDate, 
+      time: showtime.time, 
+      studio: showtime.studio_name,
+      studio_id: showtime.studio_id,
+      price: showtime.price
+    }
+  }}
+  className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-black font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 text-sm block text-center"
+>
+  Pilih Kursi
+</Link>
+
                           </div>
                         </div>
                       ))}

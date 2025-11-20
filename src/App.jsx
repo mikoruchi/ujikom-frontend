@@ -2,6 +2,7 @@ import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/navbar";
 import Footer from "./components/Footer";
 import AdminLayout from "./components/AdminLayout";
+import CashierLayout from "./components/CashierLayout";
 import Films from "./Pages/films";
 import Home from "./Pages/Home";
 import Contact from "./Pages/Contact";
@@ -56,9 +57,11 @@ function App() {
 
   if (isCashierRoute) {
     return (
+      <CashierLayout>
       <Routes>
         <Route path="/cashier" element={<CashierDashboard />} />
       </Routes>
+      </CashierLayout>
     );
   }
 
