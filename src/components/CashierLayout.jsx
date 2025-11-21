@@ -7,6 +7,7 @@ const CashierLayout = ({ children }) => {
 
   const menuItems = [
     { path: '/cashier', icon: '📊', label: 'Dashboard' },
+    { path: '/cashier/DataTransaksi', icon: '📊', label: 'Data Transaksi' },
   
    
   ];

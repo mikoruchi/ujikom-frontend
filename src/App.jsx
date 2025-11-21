@@ -29,7 +29,8 @@ import AdminSeats from "./Pages/Admin/Seats";
 import AdminStudios from "./Pages/Admin/Studios";
 
 // Cashier & Owner Pages
-import CashierDashboard from "./Pages/Cashier/CashierDashboard";
+import CashierDashboard from "./Pages/Cashier/Dashboard";
+import CashierDataTransaksi from "./Pages/Cashier/DataTransaksi";
 import OwnerDashboard from "./Pages/Owner/OwnerDashboard";
 
 function App() {
@@ -60,6 +61,7 @@ function App() {
       <CashierLayout>
       <Routes>
         <Route path="/cashier" element={<CashierDashboard />} />
+        <Route path="/cashier/DataTransaksi" element={<CashierDataTransaksi />} />
       </Routes>
       </CashierLayout>
     );
@@ -96,7 +98,6 @@ function App() {
           <Route path="/register" element={<Register />} />
           
           {/* Role-based redirects */}
-          <Route path="/cashier" element={<CashierDashboard />} />
           <Route path="/owner" element={<OwnerDashboard />} />
           <Route path="/profile" element={<Profile />} />
           

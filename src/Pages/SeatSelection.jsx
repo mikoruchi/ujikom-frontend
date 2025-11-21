@@ -6,6 +6,11 @@ const SeatSelection = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { movie, schedule } = location.state || {};
+
+  useEffect(() => {
+    console.log('Movie:', movie);
+    console.log('Schedule:', schedule);
+  }, []); // hanya sekali saat mount
   
   const [seats, setSeats] = useState([]);
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -304,14 +309,22 @@ const SeatSelection = () => {
       return;
     }
     
-    navigate('/payment', {
-      state: {
-        movie,
-        schedule,
-        seats: selectedSeats,
-        totalPrice: calculateTotalPrice()
-      }
-    });
+navigate('/payment', {
+  state: {
+    movie: movie,
+    schedule: {
+      ...schedule,
+      jadwal_id: schedule.schedule_id || schedule.id || schedule.jadwal_id
+    },
+    seats: selectedSeats,
+    totalPrice: selectedSeats.length * schedule.price
+  }
+});
+
+
+
+
+
   };
 
   // DEBUG: Log data untuk troubleshooting
