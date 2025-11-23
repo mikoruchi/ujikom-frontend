@@ -7,6 +7,8 @@ const BookingHistory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const navigate = useNavigate();
 
   // Get auth token
@@ -83,12 +85,9 @@ const BookingHistory = () => {
       const api = createApiInstance();
       const response = await api.get('/payments/history');
 
-      console.log('📦 Tickets response:', response.data);
-
       if (response.data.success) {
         const tickets = response.data.data || [];
         setBookings(tickets);
-        console.log(`✅ Loaded ${tickets.length} tickets for user`);
       } else {
         throw new Error(response.data.message || 'Gagal memuat data tiket');
       }
@@ -105,28 +104,128 @@ const BookingHistory = () => {
     }
   };
 
-  // Cancel ticket
-  const handleCancelTicket = async (ticketId) => {
-    if (!window.confirm('Apakah Anda yakin ingin membatalkan tiket ini?')) {
-      return;
-    }
-
+  // View Invoice
+  const handleViewInvoice = async (ticket) => {
     try {
       const api = createApiInstance();
-      const response = await api.delete(`/tickets/${ticketId}/cancel`);
-
+      const response = await api.get(`/payments/${ticket.id}/invoice`);
+      
       if (response.data.success) {
-        alert('✅ Tiket berhasil dibatalkan');
-        // Refresh data
-        fetchUserTickets();
+        setSelectedInvoice(response.data.data);
+        setShowInvoiceModal(true);
       } else {
-        throw new Error(response.data.message || 'Gagal membatalkan tiket');
+        throw new Error(response.data.message || 'Gagal memuat invoice');
       }
     } catch (err) {
-      console.error('❌ Error cancelling ticket:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Gagal membatalkan tiket';
-      alert(`❌ Error: ${errorMessage}`);
+      console.error('❌ Error fetching invoice:', err);
+      alert('Gagal memuat invoice: ' + (err.response?.data?.message || err.message));
     }
+  };
+
+  // Download Invoice PDF
+  const handleDownloadInvoice = async (ticket) => {
+    try {
+      // Create PDF content
+      const invoiceContent = generateInvoiceContent(ticket);
+      
+      // Create blob and download
+      const blob = new Blob([invoiceContent], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${getBookingCode(ticket)}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error('❌ Error downloading invoice:', err);
+      alert('Gagal mengunduh invoice: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  // Generate invoice content for PDF
+  const generateInvoiceContent = (ticket) => {
+    const bookingCode = getBookingCode(ticket);
+    
+    // Simple HTML content for PDF
+    return `
+      <html>
+        <head>
+          <title>Invoice ${bookingCode}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            .total { font-size: 18px; font-weight: bold; color: #059669; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>🎬 BIOSKOP CINEMA</h1>
+            <h2>INVOICE</h2>
+          </div>
+          
+          <div class="section">
+            <h3>Informasi Pemesanan</h3>
+            <div class="row">
+              <span>Booking ID:</span>
+              <span><strong>${bookingCode}</strong></span>
+            </div>
+            <div class="row">
+              <span>Film:</span>
+              <span>${ticket.jadwal?.film?.title || 'Film Tidak Diketahui'}</span>
+            </div>
+            <div class="row">
+              <span>Tanggal Tayang:</span>
+              <span>${formatDate(ticket.jadwal?.show_date)}</span>
+            </div>
+            <div class="row">
+              <span>Jam Tayang:</span>
+              <span>${formatTime(ticket.jadwal?.show_time)}</span>
+            </div>
+            <div class="row">
+              <span>Studio:</span>
+              <span>${ticket.jadwal?.studio?.studio || 'N/A'}</span>
+            </div>
+            <div class="row">
+              <span>Kursi:</span>
+              <span>${formatSeats(ticket.kursi)}</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Detail Pembayaran</h3>
+            <div class="row">
+              <span>Subtotal:</span>
+              <span>Rp ${formatPrice(ticket.subtotal)}</span>
+            </div>
+            <div class="row">
+              <span>Biaya Admin:</span>
+              <span>Rp ${formatPrice(ticket.admin_fee || 0)}</span>
+            </div>
+            <div class="row total">
+              <span>Total:</span>
+              <span>Rp ${formatPrice(ticket.total_amount)}</span>
+            </div>
+            <div class="row">
+              <span>Metode Bayar:</span>
+              <span>${ticket.method?.toUpperCase() || 'N/A'}</span>
+            </div>
+            <div class="row">
+              <span>Status:</span>
+              <span>${getStatusText(ticket.status)}</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <p><strong>Dipesan pada:</strong> ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('id-ID') : 'N/A'}</p>
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   // Format date
@@ -148,7 +247,6 @@ const BookingHistory = () => {
   const formatTime = (timeString) => {
     if (!timeString) return 'N/A';
     try {
-      // Handle both HH:mm:ss and HH:mm formats
       const timeParts = timeString.split(':');
       return `${timeParts[0]}:${timeParts[1]}`;
     } catch (error) {
@@ -165,12 +263,11 @@ const BookingHistory = () => {
   // Get status color
   const getStatusColor = (status) => {
     switch (status) {
-      case 'paid':
-      case 'completed': 
+      case 'success':
         return 'bg-green-500';
-      case 'booked':
+      case 'pending':
         return 'bg-blue-500';
-      case 'cancelled':
+      case 'failed':
         return 'bg-red-500';
       default:
         return 'bg-gray-500';
@@ -180,84 +277,176 @@ const BookingHistory = () => {
   // Get status text in Indonesian
   const getStatusText = (status) => {
     switch (status) {
-      case 'paid':
-      case 'completed':
-        return 'Selesai';
-      case 'booked':
+      case 'success':
+        return 'Berhasil';
+      case 'pending':
         return 'Menunggu Pembayaran';
-      case 'cancelled':
-        return 'Dibatalkan';
+      case 'failed':
+        return 'Gagal';
       default:
         return status;
     }
   };
 
-  // Check if ticket is upcoming (for today or future)
-  const isUpcoming = (ticket) => {
-    if (ticket.status !== 'booked' && ticket.status !== 'paid') return false;
-    if (!ticket.jadwal?.date || !ticket.jadwal?.time) return false;
+  // Format kursi array to string
+  const formatSeats = (seats) => {
+    if (!seats) return 'N/A';
     
     try {
-      const showDate = new Date(ticket.jadwal.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      if (typeof seats === 'string') {
+        const parsedSeats = JSON.parse(seats);
+        if (Array.isArray(parsedSeats)) {
+          return parsedSeats.join(', ');
+        }
+      }
       
-      return showDate >= today;
-    } catch (error) {
-      return false;
-    }
-  };
-
-  // Check if ticket can be cancelled
-  const canCancel = (ticket) => {
-    if (ticket.status !== 'booked' && ticket.status !== 'paid') return false;
-    if (!ticket.jadwal?.date || !ticket.jadwal?.time) return false;
-    
-    try {
-      const showDateTime = new Date(`${ticket.jadwal.date}T${ticket.jadwal.time}`);
-      const now = new Date();
-      const timeDiff = showDateTime - now;
-      const hoursDiff = timeDiff / (1000 * 60 * 60);
+      if (Array.isArray(seats)) {
+        return seats.join(', ');
+      }
       
-      // Can cancel if more than 2 hours before show
-      return hoursDiff > 2;
+      return seats;
     } catch (error) {
-      return false;
+      return seats || 'N/A';
     }
   };
 
-  // View ticket details
-  const handleViewTicket = (ticket) => {
-    navigate('/ticket-detail', { state: { ticket } });
-  };
-
-  // Download invoice
-  const handleDownloadInvoice = (ticket) => {
-    if (ticket.invoice_url) {
-      window.open(ticket.invoice_url, '_blank');
-    } else {
-      alert('Invoice belum tersedia untuk diunduh');
-    }
-  };
-
-  // Give rating
-  const handleGiveRating = (ticket) => {
-    navigate('/rating', { state: { ticket } });
-  };
-
-  // Retry payment for booked tickets
-  const handleRetryPayment = (ticket) => {
-    navigate('/payment', { 
-      state: { 
-        bookingId: ticket.id,
-        totalPrice: ticket.total_amount || ticket.jadwal?.price 
-      } 
-    });
+  // Generate booking code
+  const getBookingCode = (ticket) => {
+    return ticket.booking_code || `PAY${ticket.id.toString().padStart(6, '0')}`;
   };
 
   useEffect(() => {
     fetchUserTickets();
   }, []);
+
+  // Invoice Modal Component
+  const InvoiceModal = () => {
+    if (!showInvoiceModal || !selectedInvoice) return null;
+
+    const invoice = selectedInvoice;
+    const bookingCode = getBookingCode(invoice);
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">INVOICE</h2>
+              <button 
+                onClick={() => setShowInvoiceModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Invoice Content */}
+            <div className="border-2 border-gray-300 rounded-lg p-6">
+              {/* Film Info */}
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-bold text-gray-800">
+                  {invoice.jadwal?.film?.title || 'Film Tidak Diketahui'}
+                </h3>
+                <p className="text-gray-600">Studio Bioskop</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Booking ID:</span>
+                    <span className="font-semibold text-blue-600">{bookingCode}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Tanggal Tayang:</span>
+                    <span>{formatDate(invoice.jadwal?.show_date)}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Jam Tayang:</span>
+                    <span>{formatTime(invoice.jadwal?.show_time)}</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Studio:</span>
+                    <span>{invoice.jadwal?.studio?.studio || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Kursi:</span>
+                    <span className="font-semibold">{formatSeats(invoice.kursi)}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Total Harga:</span>
+                    <span className="font-semibold text-green-600">
+                      Rp {formatPrice(invoice.total_amount)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Info */}
+              <div className="border-t pt-4 text-xs text-gray-600">
+                <div className="mb-2">
+                  <span>Dipesan pada: </span>
+                  <span className="font-semibold">
+                    {invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('id-ID', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'N/A'}
+                  </span>
+                </div>
+                <div className="mb-2">
+                  <span>Jumlah Tiket: </span>
+                  <span className="font-semibold">{invoice.ticket_count || 1}</span>
+                </div>
+                {invoice.method && (
+                  <div className="mb-2">
+                    <span>Metode Bayar: </span>
+                    <span className="font-semibold">{invoice.method.toUpperCase()}</span>
+                  </div>
+                )}
+                {invoice.admin_fee > 0 && (
+                  <div className="mb-2">
+                    <span>Biaya Admin: </span>
+                    <span className="font-semibold">Rp {formatPrice(invoice.admin_fee)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Status */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Status:</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${getStatusColor(invoice.status)}`}>
+                    {getStatusText(invoice.status)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => handleDownloadInvoice(invoice)}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition-colors"
+              >
+                📄 Download PDF
+              </button>
+              <button
+                onClick={() => setShowInvoiceModal(false)}
+                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -303,11 +492,6 @@ const BookingHistory = () => {
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Riwayat Pemesanan</h1>
             <p className="text-gray-400">Lihat semua tiket yang pernah Anda pesan</p>
-            {user && (
-              <p className="text-gray-500 text-sm mt-1">
-                User: {user.name} | Total: {bookings.length} tiket
-              </p>
-            )}
           </div>
           <Link
             to="/"
@@ -337,8 +521,8 @@ const BookingHistory = () => {
                   {/* Movie Poster */}
                   <div className="flex-shrink-0">
                     <img
-                      src={ticket.jadwal?.movie?.poster || '/api/placeholder/80/112'}
-                      alt={ticket.jadwal?.movie?.title}
+                      src={ticket.jadwal?.film?.poster || '/api/placeholder/80/112'}
+                      alt={ticket.jadwal?.film?.title}
                       className="w-20 h-28 object-cover rounded-lg shadow-lg"
                       onError={(e) => {
                         e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iMTEyIiB2aWV3Qm94PSIwIDAgODAgMTEyIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSI4MCIgaGVpZ2h0PSIxMTIiIGZpbGw9IiMzQTRBNTciLz48dGV4dCB4PSI0MCIgeT0iNTYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM3RTg4OEQiIGZvbnQtc2l6ZT0iMTIiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiI+Tm8gSW1hZ2U8L3RleHQ+PC9zdmc+';
@@ -350,11 +534,10 @@ const BookingHistory = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3 flex-wrap">
                       <h3 className="text-xl font-semibold text-white">
-                        {ticket.jadwal?.movie?.title || 'Film Tidak Diketahui'}
+                        {ticket.jadwal?.film?.title || 'Film Tidak Diketahui'}
                       </h3>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${getStatusColor(ticket.status)}`}>
                         {getStatusText(ticket.status)}
-                        {isUpcoming(ticket) && ' • Akan Datang'}
                       </span>
                     </div>
                     
@@ -362,26 +545,26 @@ const BookingHistory = () => {
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-gray-400">Booking ID:</span>
-                          <span className="text-white font-mono">{ticket.booking_code}</span>
+                          <span className="text-white font-mono">{getBookingCode(ticket)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Tanggal Tayang:</span>
-                          <span className="text-white">{formatDate(ticket.jadwal?.date)}</span>
+                          <span className="text-white">{formatDate(ticket.jadwal?.show_date)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Jam Tayang:</span>
-                          <span className="text-white">{formatTime(ticket.jadwal?.time)}</span>
+                          <span className="text-white">{formatTime(ticket.jadwal?.show_time)}</span>
                         </div>
                       </div>
                       
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-gray-400">Studio:</span>
-                          <span className="text-white">{ticket.studio?.studio || ticket.jadwal?.studio?.studio || 'N/A'}</span>
+                          <span className="text-white">{ticket.jadwal?.studio?.studio || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Kursi:</span>
-                          <span className="text-white font-semibold">{ticket.kursi?.kursi_no || 'N/A'}</span>
+                          <span className="text-white font-semibold">{formatSeats(ticket.kursi)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Total Harga:</span>
@@ -416,142 +599,40 @@ const BookingHistory = () => {
                           <span className="text-blue-400">{ticket.method.toUpperCase()}</span>
                         </div>
                       )}
-                    </div>
-
-                    {/* QR Code Info */}
-                    {ticket.qr_code && (
-                      <div className="mt-3 p-3 bg-gray-700 rounded text-xs flex items-center gap-2">
-                        <span className="text-2xl">✅</span>
+                      {ticket.admin_fee > 0 && (
                         <div>
-                          <span className="text-gray-400">QR Code tersedia - </span>
-                          <span className="text-green-400">Tunjukkan di pintu masuk</span>
+                          <span>Biaya Admin: </span>
+                          <span className="text-orange-400">Rp {formatPrice(ticket.admin_fee)}</span>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
                   <div className="flex flex-col gap-2 lg:w-48">
-                    {/* Actions for booked tickets */}
-                    {ticket.status === 'booked' && (
-                      <>
-                        <button 
-                          onClick={() => handleRetryPayment(ticket)}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-black py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          💳 Bayar Sekarang
-                        </button>
-                        <button 
-                          onClick={() => handleViewTicket(ticket)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          📋 Detail Pemesanan
-                        </button>
-                        {canCancel(ticket) ? (
-                          <button 
-                            onClick={() => handleCancelTicket(ticket.id)}
-                            className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                          >
-                            ❌ Batalkan
-                          </button>
-                        ) : (
-                          <button 
-                            disabled
-                            className="bg-gray-500 text-white py-2 px-4 rounded-lg text-sm font-semibold cursor-not-allowed opacity-50"
-                            title="Tidak dapat dibatalkan (kurang dari 2 jam sebelum tayang)"
-                          >
-                            🚫 Tidak Dapat Dibatalkan
-                          </button>
-                        )}
-                      </>
-                    )}
-                    
-                    {/* Actions for paid/completed tickets */}
-                    {(ticket.status === 'paid' || ticket.status === 'completed') && (
-                      <>
-                        <button 
-                          onClick={() => handleViewTicket(ticket)}
-                          className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          🎫 Lihat Tiket
-                        </button>
-                        <button 
-                          onClick={() => handleDownloadInvoice(ticket)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          📄 Download Invoice
-                        </button>
-                        {canCancel(ticket) && (
-                          <button 
-                            onClick={() => handleCancelTicket(ticket.id)}
-                            className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                          >
-                            ❌ Batalkan
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => handleGiveRating(ticket)}
-                          className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          ⭐ Beri Rating
-                        </button>
-                      </>
-                    )}
-                    
-                    {/* Actions for cancelled tickets */}
-                    {ticket.status === 'cancelled' && (
-                      <button 
-                        onClick={() => handleViewTicket(ticket)}
-                        className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
-                      >
-                        📋 Lihat Detail
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => handleViewInvoice(ticket)}
+                      className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      📋 Lihat Invoice
+                    </button>
+
+                    <button 
+                      onClick={() => handleDownloadInvoice(ticket)}
+                      className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      📄 Download PDF
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-
-        {/* Info tentang status tiket */}
-        <div className="mt-8 bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h3 className="text-yellow-400 font-semibold mb-4 flex items-center gap-2">
-            <span className="text-xl">ℹ️</span>
-            Informasi Status Tiket
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <div>
-                <div className="text-white font-semibold">Menunggu Pembayaran</div>
-                <div className="text-gray-400 text-xs">Selesaikan pembayaran segera</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <div>
-                <div className="text-white font-semibold">Selesai</div>
-                <div className="text-gray-400 text-xs">Pembayaran berhasil, tiket aktif</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              <div>
-                <div className="text-white font-semibold">Dibatalkan</div>
-                <div className="text-gray-400 text-xs">Pemesanan dibatalkan</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg">
-              <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-              <div>
-                <div className="text-white font-semibold">Pembatalan</div>
-                <div className="text-gray-400 text-xs">Minimal 2 jam sebelum tayang</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Invoice Modal */}
+      <InvoiceModal />
     </div>
   );
 };

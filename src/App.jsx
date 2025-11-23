@@ -9,7 +9,6 @@ import Contact from "./Pages/Contact";
 import Login from "./Pages/Login";
 import Register from "./Pages/Register";
 import Profile from "./Pages/Profile";
-
 import Schedule from "./Pages/Schedule";
 import MovieDetail from "./Pages/MovieDetail";
 import NotFound from "./Pages/NotFound";
@@ -38,6 +37,7 @@ function App() {
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isCashierRoute = location.pathname.startsWith('/cashier');
   const isOwnerRoute = location.pathname.startsWith('/owner');
+  const isInvoiceRoute = location.pathname === '/invoice';
 
   if (isAdminRoute) {
     return (
@@ -59,10 +59,10 @@ function App() {
   if (isCashierRoute) {
     return (
       <CashierLayout>
-      <Routes>
-        <Route path="/cashier" element={<CashierDashboard />} />
-        <Route path="/cashier/DataTransaksi" element={<CashierDataTransaksi />} />
-      </Routes>
+        <Routes>
+          <Route path="/cashier" element={<CashierDashboard />} />
+          <Route path="/cashier/DataTransaksi" element={<CashierDataTransaksi />} />
+        </Routes>
       </CashierLayout>
     );
   }
@@ -75,6 +75,16 @@ function App() {
     );
   }
 
+  // Untuk route invoice, tidak render navbar dan footer
+  if (isInvoiceRoute) {
+    return (
+      <Routes>
+        <Route path="/invoice" element={<Invoice />} />
+      </Routes>
+    );
+  }
+
+  // Untuk route lainnya, render dengan navbar dan footer
   return (
     <div className="bg-gray-950 min-h-screen">
       <Navbar />
@@ -87,8 +97,6 @@ function App() {
           {/* Halaman Film */}
           <Route path="/films" element={<Films />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
-          
-          
           
           {/* Halaman Kontak */}
           <Route path="/contact" element={<Contact />} />
@@ -107,8 +115,6 @@ function App() {
           <Route path="/payment" element={<Payment />} />
           <Route path="/invoice" element={<Invoice />} />
           <Route path="/booking-history" element={<BookingHistory />} />
-          
-
           
           {/* 404 Page */}
           <Route path="*" element={<NotFound />} />
