@@ -24,7 +24,7 @@ const CashierDataTransaksi = () => {
   });
 
   // Sesuaikan dengan URL Laravel Anda
-  const API_BASE = 'http://localhost:8000/api/v1';
+  const API_BASE = 'http://127.0.0.1:8000/api/v1';
 
   useEffect(() => {
     loadTransactions();
@@ -44,8 +44,6 @@ const CashierDataTransaksi = () => {
       // Coba beberapa endpoint yang mungkin
       const endpoints = [
         '/payments',
-        '/payment',
-        '/payments/index'
       ];
 
       let response = null;
@@ -59,6 +57,7 @@ const CashierDataTransaksi = () => {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
             },
           });
 

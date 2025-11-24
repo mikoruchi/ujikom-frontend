@@ -9,12 +9,15 @@ const AdminSchedules = () => {
   const [loading, setLoading] = useState(true);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [formData, setFormData] = useState({
+    
     film_id: '',
     studio_id: '',
     show_date: '',
     show_time: '',
     price: '',
   });
+  const [formErrors, setFormErrors] = useState({});
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   const token = localStorage.getItem('token');
   
@@ -84,30 +87,110 @@ const AdminSchedules = () => {
     }
   };
 
+  const validateForm = () => {
+    const errors = {};
+    
+    console.log('🔄 Validating form data:', formData);
+    
+    if (!formData.film_id || formData.film_id === '' || formData.film_id === '0') {
+      errors.film_id = 'Film harus dipilih';
+      console.log('❌ film_id validation failed - value:', formData.film_id);
+    } else {
+      console.log('✅ film_id validation passed - value:', formData.film_id);
+    }
+    
+    if (!formData.studio_id || formData.studio_id === '' || formData.studio_id === '0') {
+      errors.studio_id = 'Studio harus dipilih';
+      console.log('❌ studio_id validation failed - value:', formData.studio_id);
+    } else {
+      console.log('✅ studio_id validation passed - value:', formData.studio_id);
+    }
+    
+    if (!formData.show_date) {
+      errors.show_date = 'Tanggal harus diisi';
+      console.log('❌ show_date validation failed - value:', formData.show_date);
+    } else {
+      console.log('✅ show_date validation passed - value:', formData.show_date);
+    }
+    
+    if (!formData.show_time) {
+      errors.show_time = 'Jam harus diisi';
+      console.log('❌ show_time validation failed - value:', formData.show_time);
+    } else {
+      console.log('✅ show_time validation passed - value:', formData.show_time);
+    }
+    
+    if (!formData.price || parseFloat(formData.price) <= 0) {
+      errors.price = 'Harga harus lebih dari 0';
+      console.log('❌ price validation failed - value:', formData.price);
+    } else {
+      console.log('✅ price validation passed - value:', formData.price);
+    }
+
+    console.log('📋 Validation errors:', errors);
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      // Validasi form
-      if (!formData.film_id || !formData.studio_id || !formData.show_date || !formData.show_time || !formData.price) {
-        alert('❌ Semua field harus diisi!');
-        return;
-      }
+    setSubmitLoading(true);
+    
+    console.log('🎯 SUBMIT TRIGGERED');
+    console.log('🔍 FORM DATA BEFORE VALIDATION:', formData);
+    console.log('🎬 Available films:', films.map(f => ({id: f.id, title: f.title})));
+    console.log('🎪 Available studios:', studios.map(s => ({id: s.id, name: s.studio || s.name})));
+    
+    // Validasi form
+    if (!validateForm()) {
+      alert('❌ Mohon lengkapi semua field yang wajib diisi!');
+      setSubmitLoading(false);
+      return;
+    }
+    
+    // Validasi tambahan untuk memastikan data tersedia
+    if (films.length === 0) {
+      alert('❌ Tidak ada film tersedia. Pastikan data film sudah dimuat.');
+      setSubmitLoading(false);
+      return;
+    }
+    
+    if (studios.length === 0) {
+      alert('❌ Tidak ada studio tersedia. Pastikan data studio sudah dimuat.');
+      setSubmitLoading(false);
+      return;
+    }
 
-      // Format payload dengan benar
+    try {
+      // Format payload dengan benar - PASTIKAN film_id termasuk
       const payload = {
         film_id: parseInt(formData.film_id),
         studio_id: parseInt(formData.studio_id),
         show_date: formData.show_date,
-        show_time: formData.show_time + ':00', // Tambahkan seconds untuk format database
+        show_time: formData.show_time + ':00',
         price: parseFloat(formData.price)
       };
+      
+      // Validasi ulang payload sebelum dikirim
+      if (!payload.film_id || isNaN(payload.film_id)) {
+        alert('❌ Film ID tidak valid. Silakan pilih film terlebih dahulu.');
+        setSubmitLoading(false);
+        return;
+      }
+      
+      if (!payload.studio_id || isNaN(payload.studio_id)) {
+        alert('❌ Studio ID tidak valid. Silakan pilih studio terlebih dahulu.');
+        setSubmitLoading(false);
+        return;
+      }
 
-      console.log('📤 Sending payload:', payload);
+      console.log('📤 FINAL PAYLOAD TO SEND:', payload);
       console.log('🎯 Mode:', editingSchedule ? 'EDIT' : 'ADD');
 
       let response;
       if (editingSchedule) {
         // EDIT MODE
+        console.log('✏️ Editing schedule ID:', editingSchedule.id);
         response = await axios.put(
           `http://localhost:8000/api/v1/jadwals/${editingSchedule.id}`, 
           payload, 
@@ -117,6 +200,7 @@ const AdminSchedules = () => {
         alert('✅ Jadwal berhasil diperbarui!');
       } else {
         // ADD MODE
+        console.log('➕ Adding new schedule');
         response = await axios.post(
           'http://localhost:8000/api/v1/jadwals', 
           payload, 
@@ -130,8 +214,17 @@ const AdminSchedules = () => {
       fetchData(); // Refresh data
     } catch (err) {
       console.error('❌ Error saving schedule:', err);
+      console.error('🔍 Error response:', err.response);
       console.error('🔍 Error details:', err.response?.data);
-      alert('❌ Gagal menyimpan jadwal: ' + (err.response?.data?.message || err.message));
+      console.error('🔍 Error message:', err.message);
+      
+      // Tampilkan error yang lebih spesifik
+      const errorMessage = err.response?.data?.message || 
+                          err.response?.data?.error || 
+                          err.message;
+      alert('❌ Gagal menyimpan jadwal: ' + errorMessage);
+    } finally {
+      setSubmitLoading(false);
     }
   };
 
@@ -151,38 +244,42 @@ const AdminSchedules = () => {
   const handleEdit = (schedule) => {
     console.log('✏️ Editing schedule:', schedule);
     setEditingSchedule(schedule);
+    setFormErrors({});
     
-    // Format date untuk input type="date" (YYYY-MM-DD)
-    const showDate = schedule.show_date ? new Date(schedule.show_date).toISOString().split('T')[0] : '';
+    const showDate = schedule.show_date ? schedule.show_date.split('T')[0] : '';
+    const showTime = schedule.show_time ? schedule.show_time.substring(0,5) : '';
     
-    // Format time untuk input type="time" (HH:MM)
-    const showTime = schedule.show_time ? schedule.show_time.substring(0, 5) : '';
-    
-    setFormData({
+    const newFormData = {
       film_id: schedule.film_id?.toString() || '',
       studio_id: schedule.studio_id?.toString() || '',
-      show_date: showDate,
-      show_time: showTime,
+      show_date: schedule.show_date ? showDate : '',
+      show_time: schedule.show_time ? showTime : '',
       price: schedule.price?.toString() || '',
-    });
+    };
     
+    console.log('📝 Setting form data for edit:', newFormData);
+    setFormData(newFormData);
     setShowForm(true);
   };
 
   const handleAddNew = () => {
     console.log('➕ Adding new schedule');
+    setFormErrors({});
     resetForm();
     setShowForm(true);
   };
 
   const resetForm = () => {
-    setFormData({
+    const emptyForm = {
       film_id: '',
       studio_id: '',
       show_date: '',
       show_time: '',
       price: '',
-    });
+    };
+    console.log('🔄 Resetting form to:', emptyForm);
+    setFormData(emptyForm);
+    setFormErrors({});
     setEditingSchedule(null);
     setShowForm(false);
   };
@@ -201,9 +298,21 @@ const AdminSchedules = () => {
     }
   };
 
-  const formatTime = (timeString) => {
+  const formatTime = (timeString) => {  
     if (!timeString) return '-';
     return timeString.substring(0, 5);
+  };
+
+  const handleFilmChange = (e) => {
+    const value = e.target.value;
+    console.log('🎬 Film changed:', value);
+    setFormData({ ...formData, film_id: value });
+  };
+
+  const handleStudioChange = (e) => {
+    const value = e.target.value;
+    console.log('🎪 Studio changed:', value);
+    setFormData({ ...formData, studio_id: value });
   };
 
   if (loading) {
@@ -236,9 +345,19 @@ const AdminSchedules = () => {
         {/* DEBUG INFO */}
         <div className="mb-4 p-4 bg-gray-800 rounded-lg">
           <div className="text-sm text-gray-400">
-            <div>Debug Info:</div>
-            <div>Total Films: {films.length} | Total Studios: {studios.length} | Total Schedules: {schedules.length}</div>
-            <div>Token: {token ? '✅ Available' : '❌ Missing'}</div>
+            <div className="text-yellow-400 font-semibold mb-2">Debug Information:</div>
+            <div>Total Films: <span className="text-white">{films.length}</span></div>
+            <div>Total Studios: <span className="text-white">{studios.length}</span></div>
+            <div>Total Schedules: <span className="text-white">{schedules.length}</span></div>
+            <div>Token: <span className={token ? 'text-green-400' : 'text-red-400'}>
+              {token ? '✅ Available' : '❌ Missing'}
+            </span></div>
+            <div className="mt-2 text-xs">
+              Film IDs: {films.map(f => f.id).join(', ')}
+            </div>
+            <div className="text-xs">
+              Studio IDs: {studios.map(s => s.id).join(', ')}
+            </div>
           </div>
         </div>
 
@@ -249,23 +368,60 @@ const AdminSchedules = () => {
               <h2 className="text-xl font-bold text-white mb-4">
                 {editingSchedule ? 'Edit Jadwal' : 'Tambah Jadwal Baru'}
               </h2>
+              
+              {/* DEBUG INFO IN FORM */}
+              <div className="mb-4 p-3 bg-gray-700 rounded text-xs">
+                <div className="text-yellow-400 font-semibold mb-1">Form Debug Info:</div>
+                <div className="grid grid-cols-2 gap-1">
+                  <span className="text-gray-400">film_id:</span>
+                  <span className={formData.film_id ? 'text-green-400' : 'text-red-400'}>
+                    {formData.film_id || 'EMPTY'}
+                  </span>
+                  <span className="text-gray-400">studio_id:</span>
+                  <span className={formData.studio_id ? 'text-green-400' : 'text-red-400'}>
+                    {formData.studio_id || 'EMPTY'}
+                  </span>
+                  <span className="text-gray-400">show_date:</span>
+                  <span className={formData.show_date ? 'text-green-400' : 'text-red-400'}>
+                    {formData.show_date || 'EMPTY'}
+                  </span>
+                  <span className="text-gray-400">show_time:</span>
+                  <span className={formData.show_time ? 'text-green-400' : 'text-red-400'}>
+                    {formData.show_time || 'EMPTY'}
+                  </span>
+                  <span className="text-gray-400">price:</span>
+                  <span className={formData.price ? 'text-green-400' : 'text-red-400'}>
+                    {formData.price || 'EMPTY'}
+                  </span>
+                </div>
+              </div>
+              
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Film Selection */}
                 <div>
                   <label className="text-white text-sm block mb-2">Film *</label>
                   <select
                     value={formData.film_id}
-                    onChange={(e) => setFormData({ ...formData, film_id: e.target.value })}
-                    className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-yellow-500 focus:outline-none"
+                    onChange={handleFilmChange}
+                    className={`w-full bg-gray-700 text-white p-3 rounded-lg border focus:outline-none ${
+                      formErrors.film_id ? 'border-red-500' : 'border-gray-600 focus:border-yellow-500'
+                    }`}
                     required
+                    disabled={films.length === 0}
                   >
-                    <option value="">Pilih Film</option>
+                    <option value="">-- Pilih Film --</option>
                     {films.map((film) => (
                       <option key={film.id} value={film.id}>
-                        {film.title} ({film.duration} menit)
+                        {film.title} ({film.duration} menit) - {film.genre}
                       </option>
                     ))}
                   </select>
+                  {formErrors.film_id && (
+                    <p className="text-red-400 text-sm mt-1">{formErrors.film_id}</p>
+                  )}
+                  {films.length === 0 && (
+                    <p className="text-red-400 text-sm mt-1">❌ Tidak ada film tersedia. Pastikan API films bekerja.</p>
+                  )}
                 </div>
 
                 {/* Studio Selection */}
@@ -273,17 +429,27 @@ const AdminSchedules = () => {
                   <label className="text-white text-sm block mb-2">Studio *</label>
                   <select
                     value={formData.studio_id}
-                    onChange={(e) => setFormData({ ...formData, studio_id: e.target.value })}
-                    className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-yellow-500 focus:outline-none"
+                    onChange={handleStudioChange}
+                    className={`w-full bg-gray-700 text-white p-3 rounded-lg border focus:outline-none ${
+                      formErrors.studio_id ? 'border-red-500' : 'border-gray-600 focus:border-yellow-500'
+                    }`}
                     required
+                    disabled={studios.length === 0}
                   >
-                    <option value="">Pilih Studio</option>
+                    <option value="">-- Pilih Studio --</option>
                     {studios.map((studio) => (
                       <option key={studio.id} value={studio.id}>
                         {studio.studio || studio.name || `Studio ${studio.id}`}
+                        {studio.description ? ` - ${studio.description}` : ''}
                       </option>
                     ))}
                   </select>
+                  {formErrors.studio_id && (
+                    <p className="text-red-400 text-sm mt-1">{formErrors.studio_id}</p>
+                  )}
+                  {studios.length === 0 && (
+                    <p className="text-red-400 text-sm mt-1">❌ Tidak ada studio tersedia. Pastikan API studios bekerja.</p>
+                  )}
                 </div>
 
                 {/* Date and Time */}
@@ -294,9 +460,14 @@ const AdminSchedules = () => {
                       type="date"
                       value={formData.show_date}
                       onChange={(e) => setFormData({ ...formData, show_date: e.target.value })}
-                      className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-yellow-500 focus:outline-none"
+                      className={`w-full bg-gray-700 text-white p-3 rounded-lg border focus:outline-none ${
+                        formErrors.show_date ? 'border-red-500' : 'border-gray-600 focus:border-yellow-500'
+                      }`}
                       required
                     />
+                    {formErrors.show_date && (
+                      <p className="text-red-400 text-sm mt-1">{formErrors.show_date}</p>
+                    )}
                   </div>
                   <div>
                     <label className="text-white text-sm block mb-2">Jam *</label>
@@ -304,9 +475,14 @@ const AdminSchedules = () => {
                       type="time"
                       value={formData.show_time}
                       onChange={(e) => setFormData({ ...formData, show_time: e.target.value })}
-                      className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-yellow-500 focus:outline-none"
+                      className={`w-full bg-gray-700 text-white p-3 rounded-lg border focus:outline-none ${
+                        formErrors.show_time ? 'border-red-500' : 'border-gray-600 focus:border-yellow-500'
+                      }`}
                       required
                     />
+                    {formErrors.show_time && (
+                      <p className="text-red-400 text-sm mt-1">{formErrors.show_time}</p>
+                    )}
                   </div>
                 </div>
 
@@ -318,24 +494,38 @@ const AdminSchedules = () => {
                     placeholder="Contoh: 50000"
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:border-yellow-500 focus:outline-none"
+                    className={`w-full bg-gray-700 text-white p-3 rounded-lg border focus:outline-none ${
+                      formErrors.price ? 'border-red-500' : 'border-gray-600 focus:border-yellow-500'
+                    }`}
                     required
                     min="0"
                     step="1000"
                   />
+                  {formErrors.price && (
+                    <p className="text-red-400 text-sm mt-1">{formErrors.price}</p>
+                  )}
                 </div>
 
                 {/* Buttons */}
                 <div className="flex gap-3 pt-4">
                   <button 
                     type="submit" 
-                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black py-3 rounded-lg font-semibold transition-colors"
+                    disabled={submitLoading || films.length === 0 || studios.length === 0}
+                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-700 text-black py-3 rounded-lg font-semibold transition-colors flex items-center justify-center"
                   >
-                    {editingSchedule ? 'Update Jadwal' : 'Simpan Jadwal'}
+                    {submitLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2"></div>
+                        Menyimpan...
+                      </>
+                    ) : (
+                      editingSchedule ? 'Update Jadwal' : 'Simpan Jadwal'
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={resetForm}
+                    disabled={submitLoading}
                     className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg transition-colors"
                   >
                     Batal
@@ -379,6 +569,9 @@ const AdminSchedules = () => {
                             {schedule.film.genre}
                           </div>
                         )}
+                        <div className="text-gray-500 text-xs mt-1">
+                          Film ID: {schedule.film_id} | Studio ID: {schedule.studio_id}
+                        </div>
                       </td>
                       <td className="p-4 text-gray-300">
                         {formatDate(schedule.show_date)}
