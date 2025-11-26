@@ -22,7 +22,6 @@ import AdminDashboard from "./Pages/Admin/Dashboard";
 import AdminMovies from "./Pages/Admin/Movies";
 import AdminUsers from "./Pages/Admin/Users";
 import AdminSchedules from "./Pages/Admin/Schedules";
-import AdminPrices from "./Pages/Admin/Prices";
 import AdminCashiers from "./Pages/Admin/Cashiers";
 import AdminSeats from "./Pages/Admin/Seats";
 import AdminStudios from "./Pages/Admin/Studios";
@@ -47,7 +46,6 @@ function App() {
           <Route path="/admin/movies" element={<AdminMovies />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/schedules" element={<AdminSchedules />} />
-          <Route path="/admin/prices" element={<AdminPrices />} />
           <Route path="/admin/cashiers" element={<AdminCashiers />} />
           <Route path="/admin/seats" element={<AdminSeats />} />
           <Route path="/admin/studios" element={<AdminStudios />} />

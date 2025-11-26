@@ -11,7 +11,6 @@ const AdminLayout = ({ children }) => {
     { path: '/admin/users', icon: '👥', label: 'Pelanggan' },
     { path: '/admin/schedules', icon: '📅', label: 'Jadwal' },
     { path: '/admin/studios', icon: '🎭', label: 'Studio' },
-    { path: '/admin/prices', icon: '💰', label: 'Harga' },
     { path: '/admin/cashiers', icon: '🏪', label: 'Kasir' },
     { path: '/admin/seats', icon: '🪑', label: 'Kursi' }
   ];
