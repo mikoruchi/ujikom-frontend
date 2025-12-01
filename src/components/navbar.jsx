@@ -72,7 +72,6 @@ export default function Navbar() {
             {[
               { to: "/", label: "Beranda" },
               { to: "/films", label: "Film" },
-              { to: "/schedule", label: "Jadwal" },
               { to: "/contact", label: "Kontak" },
             ].map((item) => (
               <NavLink
@@ -235,7 +234,6 @@ export default function Navbar() {
             {[
               { to: "/", icon: "🏠", label: "Beranda" },
               { to: "/films", icon: "🎬", label: "Film" },
-              { to: "/schedule", icon: "📅", label: "Jadwal" },
               { to: "/contact", icon: "📞", label: "Kontak" },
             ].map((item) => (
               <NavLink
